@@ -56,10 +56,55 @@ stepCommStar c    = stepComm c >>= \c' -> stepCommStar c'
 
 -- Evalua un paso de un comando
 stepComm :: MonadState m => Comm -> m Comm
-stepComm = undefined
+stepComm Skip = return Skip
+stepComm (Let v exp) = evalExp exp >>= update v >>= return Skip
+stepComm (Seq Skip c2) = return c2
+stepComm (Seq c1 c2) = stepComm c1 >>= \c' -> return (Seq c' c2)
+stepComm (IfThenElse b c1 c2) = evalExp b >>= \r -> if r then return c1 else return c2
+stepComm loop@(While b c) = evalExp b >>= \r -> if r then return (Seq c loop) else return Skip
 
 -- Evalua una expresion
 evalExp :: MonadState m => Exp a -> m a
-evalExp = undefined
+evalExp (Const n) = return n
+evalExp (Var v) = lookfor v
+evalExp (UMinus exp) = evalExp exp >>= \n -> return (-n)
+evalExp (Plus exp1 exp2) = do n1 <- evalExp exp1
+                              n2 <- evalExp exp2
+                              return (n1+n2)
+evalExp (Minus exp1 exp2) = do n1 <- evalExp exp1
+                               n2 <- evalExp exp2
+                               return (n1-n2)
+evalExp (Times exp1 exp2) = do n1 <- evalExp exp1
+                               n2 <- evalExp exp2
+                               return (n1*n2)
+evalExp (Div exp1 exp2) = do n1 <- evalExp exp1
+                             n2 <- evalExp exp2
+                             return (div n1 n2)
+evalExp (EAssgn var exp) = do n1 <- evalExp exp
+                              update var n2
+                              return n1
+evalExp (ESeq exp1 exp2) = evalExp exp1 >>= evalExp exp2
+
+evalExp BTrue = return True
+evalExp BFalse = return False
+evalExp (Lt exp1 exp2) = do b1 <- evalExp exp1
+                            b2 <- evalExp exp2
+                            return (b1<b2)
+evalExp (Gt exp1 exp2) = do b1 <- evalExp exp1
+                            b2 <- evalExp exp2
+                            return (b1>b2)
+evalExp (And exp1 exp2) = do b1 <- evalExp exp1
+                             b2 <- evalExp exp2
+                             return (b1 && b2)
+evalExp (Or exp1 exp2) = do b1 <- evalExp exp1
+                            b2 <- evalExp exp2
+                            return (b1 || b2)
+evalExp (Not exp) = evalExp exp >>= \b -> return (not b)
+evalExp (Eq exp1 exp2) = do b1 <- evalExp exp1
+                            b2 <- evalExp exp2
+                            return (b1 == b2)
+evalExp (NEq exp1 exp2) = do b1 <- evalExp exp1
+                             b2 <- evalExp exp2
+                             return (b1 /= b2)
 
 
