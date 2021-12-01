@@ -45,16 +45,16 @@ instance MonadError StateError where
 
 -- Ejercicio 2.c: Dar una instancia de MonadState para StateError:
 instance MonadState StateError where
-  lookfor v = StateError (\s -> case v M.!? s of
+  lookfor v = StateError (\s -> case M.lookup v s of
                                   Just n -> Right (n :!: s)
                                   _ -> Left UndefVar)
   update v i = StateError (\s -> Right (() :!: M.insert v i s))
 -- Ejercicio 2.d: Implementar el evaluador utilizando la monada StateError.
 -- Evalua un programa en el estado nulo
 eval :: Comm -> Either Error Env
-eval = case runStateError (stepCommStar p) initEnv of
-        Right (_ :!: s) -> Right s
-        Left e -> Left e
+eval p = case runStateError (stepCommStar p) initEnv of
+            Right (_ :!: s) -> Right s
+            Left e -> Left e
 
 -- Evalua multiples pasos de un comando, hasta alcanzar un Skip
 stepCommStar :: (MonadState m, MonadError m) => Comm -> m ()
@@ -64,7 +64,9 @@ stepCommStar c    = stepComm c >>= \c' -> stepCommStar c'
 -- Evalua un paso de un comando
 stepComm :: (MonadState m, MonadError m) => Comm -> m Comm
 stepComm Skip = return Skip
-stepComm (Let v exp) = evalExp exp >>= update v >>= return Skip
+stepComm (Let v exp) = do n <- evalExp exp
+                          update v n
+                          return Skip
 stepComm (Seq Skip c2) = return c2
 stepComm (Seq c1 c2) = stepComm c1 >>= \c' -> return (Seq c' c2)
 stepComm (IfThenElse b c1 c2) = evalExp b >>= \r -> if r then return c1 else return c2
@@ -89,10 +91,10 @@ evalExp (Div exp1 exp2) = do n1 <- evalExp exp1
                              case n2 of
                                0 -> throw DivByZero
                                _ -> return (div n1 n2)
-evalExp (EAssgn var exp) = do n1 <- evalExp exp
-                              update var n2
-                              return n1
-evalExp (ESeq exp1 exp2) = evalExp exp1 >>= evalExp exp2
+evalExp (EAssgn var exp) = do n <- evalExp exp
+                              update var n
+                              return n
+evalExp (ESeq exp1 exp2) = evalExp exp1 >> evalExp exp2
 
 evalExp BTrue = return True
 evalExp BFalse = return False
