@@ -37,7 +37,7 @@ instance Applicative StateErrorTrace where
 instance Monad StateErrorTrace where
   return x = StateErrorTrace (\s -> Right (x :!: (s, "")))
   m >>= f = StateErrorTrace (\s -> do (v :!: (s', t)) <- runStateErrorTrace m s
-                                      (v' :!: (s'', t')) <- runStateErrorTrace (f v) s
+                                      (v' :!: (s'', t')) <- runStateErrorTrace (f v) s'
                                       return (v' :!: (s'', t++t')))
 
 -- Ejercicio 3.b: Resolver en Monad.hs
@@ -53,7 +53,7 @@ instance MonadError StateErrorTrace where
 
 -- Ejercicio 3.e: Dar una instancia de MonadState para StateErrorTrace.
 instance MonadState StateErrorTrace where
-  lookfor v = StateErrorTrace (\s -> case v M.!? s of
+  lookfor v = StateErrorTrace (\s -> case M.lookup v s of
                                       Just n -> Right (n :!: (s, ""))
                                       _ -> Left UndefVar)
   update v i = StateErrorTrace (\s -> Right (() :!: (M.insert v i s,"")))
@@ -76,7 +76,7 @@ stepComm :: (MonadState m, MonadError m, MonadTrace m) => Comm -> m Comm
 stepComm Skip = return Skip
 stepComm (Let v exp) = do n <- evalExp exp
                           update v n
-                          addTrace "Let " ++ var ++ " = " ++ show n ++ ";\n"
+                          addTrace ("Let " ++ v ++ " = " ++ show n ++ ";\n")
                           return Skip
 stepComm (Seq Skip c2) = return c2
 stepComm (Seq c1 c2) = stepComm c1 >>= \c' -> return (Seq c' c2)
@@ -102,10 +102,10 @@ evalExp (Div exp1 exp2) = do n1 <- evalExp exp1
                              case n2 of
                                0 -> throw DivByZero
                                _ -> return (div n1 n2)
-evalExp (EAssgn var exp) = do n1 <- evalExp exp
-                              update var n2
-                              return n1
-evalExp (ESeq exp1 exp2) = evalExp exp1 >>= evalExp exp2
+evalExp (EAssgn var exp) = do n <- evalExp exp
+                              update var n
+                              return n
+evalExp (ESeq exp1 exp2) = evalExp exp1 >> evalExp exp2
 
 evalExp BTrue = return True
 evalExp BFalse = return False
